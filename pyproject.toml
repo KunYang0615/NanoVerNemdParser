@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dnemd"
-version = "PACKAGE_VERSION"
+version = "0.0.1.dev0"
 description = "Dynamical Non-Equilibrium Molecular Dynamics (D-NEMD) helper package"
 readme = "README.md"
 license = { text = "MIT" }

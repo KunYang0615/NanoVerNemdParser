@@ -5,13 +5,12 @@ from threading import Thread, Event
 from matplotlib import colormaps
 from MDAnalysis import Universe
 
-from nanover.app import NanoverFrameApplication
-from nanover.app import NanoverImdClient
+from nanover.app.imd_app import NanoverImdApplication
+from nanover.websocket import NanoverImdClient
 from nanover.mdanalysis import mdanalysis_to_frame_data
-from nanover.omni.record import record_from_server
-from nanover.trajectory import FrameData
-from nanover.trajectory.frame_server import \
-    PLAY_COMMAND_KEY, RESET_COMMAND_KEY, STEP_COMMAND_KEY, PAUSE_COMMAND_KEY, STEP_BACK_COMMAND_KEY
+from nanover.websocket.record import record_from_runner
+from nanover.trajectory import FrameData, keys
+
 
 from .generators import DNemdTrajectoryGenerator
 
@@ -157,7 +156,7 @@ class TrajectoryPlayback:
         self._frame_index = 0
 
         # Initialise a new frame server as needed
-        self.frame_server = frame_server if frame_server is not None else NanoverFrameApplication.basic_server(port=0)
+        self.frame_server = frame_server if frame_server is not None else NanoverImdApplication.basic_server(name="NEMD Playback", port=0)
 
         self.fps = fps
 
@@ -217,7 +216,7 @@ class TrajectoryPlayback:
         if record_to_file:
             # Note, using "localhost" will not necessarily continue to work when
             # and if server authentication is implemented.
-            record_from_server(
+            record_from_runner(
                 f"localhost:{self.frame_server.port}",
                 f"{self._record_to_file}.traj",
                 f"{self._record_to_file}.state")
@@ -225,11 +224,11 @@ class TrajectoryPlayback:
         # Register the playback control commands with the frame server so that
         # playback commands received by the server map to the relevant functions
         # present in this class.
-        self.frame_server.server.register_command(PLAY_COMMAND_KEY, self.play)
-        self.frame_server.server.register_command(PAUSE_COMMAND_KEY, self.pause)
-        self.frame_server.server.register_command(RESET_COMMAND_KEY, self.reset)
-        self.frame_server.server.register_command(STEP_COMMAND_KEY, self.step)
-        self.frame_server.server.register_command(STEP_BACK_COMMAND_KEY, self.step_back)
+        self.frame_server.register_command(keys.PLAY_COMMAND, self.play)
+        self.frame_server.register_command(keys.PAUSE_COMMAND, self.pause)
+        self.frame_server.register_command(keys.RESET_COMMAND, self.reset)
+        self.frame_server.register_command(keys.STEP_COMMAND, self.step)
+        self.frame_server.register_command(keys.STEP_BACK_COMMAND, self.step_back)
 
         # Send the topology data along with first trajectory frame. This is done
         # so that there is something to see when the frame-server first starts
@@ -445,7 +444,10 @@ class TrajectoryPlayback:
         # Convert the mdanalysis topology to a NanoVer frame
         frame = mdanalysis_to_frame_data(self.universe, topology=True, positions=False)
         self._add_matplotlib_gradient_to_frame(frame)
-        self.frame_server.frame_publisher.send_frame(0, frame)
+        
+        # Send clear signal and then the topology frame
+        self.frame_server.frame_publisher.send_clear()
+        self.frame_server.frame_publisher.send_frame(frame)
 
     @staticmethod
     def exponential_normalisation(x, x_min, x_max, p):
@@ -475,18 +477,19 @@ class TrajectoryPlayback:
             self.displacement_normalisation_upper_bound,
             self.displacement_normalisation_exponent)
 
-        frame.arrays.set("residue.normalised_metric_c", norm_displacements)
+        frame["residue.normalised_metric_c"] = norm_displacements
 
         if self._send_meta_data:
-            frame.values.set("residue.scale_from", self.residue_scale_minimum)
-            frame.values.set("residue.scale_to", self.residue_scale_maximum)
+            frame["residue.scale_from"] = self.residue_scale_minimum
+            frame["residue.scale_to"] = self.residue_scale_maximum
             self._add_matplotlib_gradient_to_frame(frame)
             self._send_meta_data = False
 
         # A value of one must be added to the frame index to prevent sending
         # the value "zero" which is a special reset command used to delete
         # all stored data on the client side.
-        self.frame_server.frame_publisher.send_frame(index + 1, frame)
+        # Note: In the new API, frame indexing is handled automatically by FramePublisher
+        self.frame_server.frame_publisher.send_frame(frame)
 
     def _add_matplotlib_gradient_to_frame(self, frame: FrameData):
         """Append colour gradient array data to specified frame.
@@ -507,7 +510,7 @@ class TrajectoryPlayback:
             if self._alpha is not None:
                 for i in range(3, len(colour_map_array), 4):
                     colour_map_array[i] = self._alpha
-            frame.arrays.set("residue.colour_gradient", colour_map_array)
+            frame["residue.colour_gradient"] = colour_map_array
 
     def set_global_renderer(self, renderer: str):
         """Apply renderer to root selection.
@@ -520,9 +523,10 @@ class TrajectoryPlayback:
         """
 
         if self.__client is None:
-            self.__client = NanoverImdClient.autoconnect()
-            self.__client.subscribe_multiplayer()
-            self.__client.subscribe_to_frames()
+            # Connect to the current frame server using the new API
+            self.__client = NanoverImdClient.from_app_server(self.frame_server)
+            # self.__client.subscribe_multiplayer()
+            # self.__client.subscribe_to_frames()
             self.__root_selection = self.__client.root_selection
 
         self.__root_selection.renderer = renderer

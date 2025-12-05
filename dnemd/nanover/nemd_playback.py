@@ -477,7 +477,8 @@ class TrajectoryPlayback:
             self.displacement_normalisation_upper_bound,
             self.displacement_normalisation_exponent)
 
-        frame["residue.normalised_metric_c"] = norm_displacements
+        frame["residue.normalised_metric_c"] = np.asarray(norm_displacements, dtype=np.float32).tobytes()
+        
 
         if self._send_meta_data:
             frame["residue.scale_from"] = self.residue_scale_minimum
@@ -510,7 +511,7 @@ class TrajectoryPlayback:
             if self._alpha is not None:
                 for i in range(3, len(colour_map_array), 4):
                     colour_map_array[i] = self._alpha
-            frame["residue.colour_gradient"] = colour_map_array
+            frame["residue.colour_gradient"] =  np.asarray(colour_map_array, dtype=np.float32).tobytes()
 
     def set_global_renderer(self, renderer: str):
         """Apply renderer to root selection.

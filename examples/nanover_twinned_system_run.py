@@ -2,6 +2,7 @@ import MDAnalysis
 from dnemd.nanover.generators import DoubledGenerator
 from dnemd.nanover.nemd_playback import TrajectoryPlayback
 from dnemd.parsing.pdb import load_pdb_file_as_doubled_mdanalysis_topology
+import numpy as np
 
 if __name__ == "__main__":
     """Example parser for sending NEMD displacement data to NanoVer-IMD.
@@ -33,17 +34,17 @@ if __name__ == "__main__":
     # colour map, may be changed in an ad-hoc manner while the server is running.
     #
     # Path to the reference structure file
-    reference_structure_file_path = r"protein_file_path.pdb"
+    reference_structure_file_path = r"reference_structure.pdb"
     # Paths to the hdf5 files storing the D-NEMD displacement data
-    displacement_file_1 = r"path/to/the/displacement/data/file_1.h5"
-    displacement_file_2 = r"path/to/the/displacement/data/file_2.h5"
+    displacement_file_1 = r"structure.h5"
+    displacement_file_2 = r"structure.h5"
 
     # In some situations it may be desirable to offset the position of the second
     # structure with respect to the first. If this is set to `None` then the two
     # structures will lie directly ontop of one another. Offsets can be defined
     # using a numpy a ray like so `offset = np.array([20., 0., 0.])`.
-    offset = None
-
+    # offset = None
+    offset = np.array([100., 0., 0.])
     # Given that the "two" systems will more or less lie ontop of one another
     # it can be somewhat hard to determine where one system starts and the other
     # ends. For this reason one may change the transparency of the proteins by

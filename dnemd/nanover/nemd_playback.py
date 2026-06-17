@@ -154,7 +154,7 @@ class TrajectoryPlayback:
         _ = universe.universe.trajectory[0]
 
         self._frame_index = 0
-
+        self._total_frames = self.universe.trajectory.n_frames
         # Initialise a new frame server as needed
         self.frame_server = frame_server if frame_server is not None else NanoverImdApplication.basic_server(name="NEMD Playback", port=0)
 
@@ -241,7 +241,11 @@ class TrajectoryPlayback:
     def frame_index(self) -> int:
         """Index of current trajectory frame."""
         return self._frame_index
-
+    @property
+    def total_frames(self) -> int:
+        """number of trajectory frame."""
+        return self._total_frames
+    
     @property
     def displacement_scale_factor(self) -> float:
         """Displacement scale factor."""
@@ -478,11 +482,12 @@ class TrajectoryPlayback:
             self.displacement_normalisation_exponent)
 
         frame["residue.normalised_metric_c"] = np.asarray(norm_displacements, dtype=np.float32).tobytes()
-        
-
+        frame["frame.progress"] = index + 1
+    
         if self._send_meta_data:
             frame["residue.scale_from"] = self.residue_scale_minimum
             frame["residue.scale_to"] = self.residue_scale_maximum
+            frame["frame.total"] = self.total_frames
             self._add_matplotlib_gradient_to_frame(frame)
             self._send_meta_data = False
 
